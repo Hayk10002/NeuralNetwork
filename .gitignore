@@ -21,6 +21,11 @@ bld/
 [Bb]in/
 [Oo]bj/
 [Ll]og/
+NeuralNetwork/Matrix.hpp
+NeuralNetwork/*.vcxproj
+NeuralNetwork/*.vcxproj.filters
+*.sln
+
 
 # Visual Studio 2015 cache/options directory
 .vs/
