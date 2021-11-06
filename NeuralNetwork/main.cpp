@@ -38,7 +38,6 @@ Matrix<double> err_c_a(const Matrix<double> &res, const Matrix<double> &exp_res)
 }
 int main()
 {
-	Matrix<Matrix<double>>;
 	NNetwork nn(4, {9, 5, 4, 2}, 0.5);
 	ifstream fin("output.txt");
 	fin >> nn;
