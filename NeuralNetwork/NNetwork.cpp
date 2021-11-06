@@ -5,25 +5,26 @@ double rand_double(double x)
 {
 	return (double)rand() / (double)RAND_MAX;
 }
-double sigmoid(double x)
+double sigmoid_f(double x)
 {
 	return 1.0 / (1.0 + exp(-x));
 }
-double sigmoid_deriv(double y) // in terms of sigmoid(x)
+double sigmoid_f_deriv(double y) // in terms of sigmoid_f(x)
 {
 	return y * (1.0 - y);
 }
-double z(double x)
+double z_f(double x)
 {
 	if (x < 0) return x / 100.0;
 	if (x < 1) return x;
 	return 1 + (x - 1) / 100.0;
 }
-double z_deriv(double y)
+double z_f_deriv(double y)
 {
 	if (y < 0 || y > 1) return 0.1;
 	return 1.0;
 }
+Act_func sigmoid{ sigmoid_f, sigmoid_f_deriv }, z{ z_f, z_f_deriv };
 void cls()
 {
 	HANDLE console = ::GetStdHandle(STD_OUTPUT_HANDLE);
@@ -49,12 +50,9 @@ Matrix<double> def_error_counting_alg(const Matrix<double>& a, const Matrix<doub
 {
 	return -(a - b);
 }
-NNetwork::NNetwork(size_t lc, std::deque<size_t> ls, double ed_coeff, std::function<double(double)> act_f, std::function<double(double)> act_f_d, std::function<Matrix<double>(const Matrix<double>&, const Matrix<double>&) > err_c_a) :
+NNetwork::NNetwork(size_t lc, std::deque<size_t> ls, double l_rate) :
 	layer_count(lc),
-	ed_coeff(ed_coeff),
-	activation_func(act_f),
-	activation_func_deriv(act_f_d),
-	err_counting_alg(err_c_a)
+	l_rate(l_rate)
 {
 	srand((size_t)time(0));
 
@@ -74,18 +72,36 @@ NNetwork::NNetwork(size_t lc, std::deque<size_t> ls, double ed_coeff, std::funct
 
 }
 
-void NNetwork::forward()
+void NNetwork::set_activ_func(Act_func act_f)
 {
+	activ_func = act_f;
+}
+
+void NNetwork::set_error_counting_algorithm(std::function<Matrix<double>(const Matrix<double>&, const Matrix<double>&)> err_c_a)
+{
+	err_counting_alg = err_c_a;
+}
+
+void NNetwork::set_learning_rate(double l_r)
+{
+	l_rate = l_r;
+}
+
+void NNetwork::forward(const Matrix<double> &input)
+{
+	Matrix<double> inpm = input;
+	inpm.resize(layers[0].get_rows_count(), layers[0].get_columns_count(), 1);
+	layers[0] = inpm;
 	for (size_t i = 1; i < layer_count; i++)
 	{
 		Matrix<double> layer(layers[i - 1] * weights[i - 1]);
-		layer.apply_func(activation_func);
+		layer.apply_func(activ_func.f);
 		layer.resize(layers[i].get_rows_count(), layers[i].get_columns_count(), 1);
 		layers[i] = layer;
 	}
 }
 
-void NNetwork::finderrors(const Matrix<double> &expected_res)
+void NNetwork::find_errors(const Matrix<double> &expected_res)
 {
 	errors[layer_count - 2] = err_counting_alg(layers[layer_count - 1], expected_res);
 	for (size_t i = layer_count - 3; (int)i >= 0; i--)
@@ -95,44 +111,48 @@ void NNetwork::finderrors(const Matrix<double> &expected_res)
 	}
 }
 
-void NNetwork::weightscorrection()
+void NNetwork::weights_correction()
 {
 	for (size_t i = 0; i < layer_count - 1; i++)
 	{
 		Matrix<double> layer = layers[i + 1];
 		layer.resize(layer.get_rows_count(), layer.get_columns_count() - (i != layer_count - 2));
-		layer.apply_func(activation_func_deriv);
-		Matrix<double> dweight(layers[i].get_Transpose() * (ed_coeff * multelembyelem(layer, errors[i])));
+		layer.apply_func(activ_func.f_deriv);
+		Matrix<double> dweight(layers[i].get_Transpose() * (l_rate * multelembyelem(layer, errors[i])));
 		weights[i] += dweight;
 	}
 }
 
-void NNetwork::onecycle(const Matrix<double> &input_m, const Matrix<double> &output_res_m)
+void NNetwork::one_learning_cycle(const Matrix<double> &input_m, const Matrix<double> &output_res_m)
 {
-	Matrix<double> inpm = input_m;
-	inpm.resize(layers[0].get_rows_count(), layers[0].get_columns_count(), 1);
-	layers[0] = inpm;
-	forward();
-	finderrors(output_res_m);
-	weightscorrection();
+	
+	forward(input_m);
+	find_errors(output_res_m);
+	weights_correction();
 
 }
 
-double NNetwork::getallerrors()
+double NNetwork::get_all_errors()
 {
 	double err = 0;
 	for (size_t i = 0; i < layer_count - 1; i++) for (size_t j = 0; j < errors[i].get_columns_count(); j++) err += errors[i](0, j) * errors[i](0, j);
 	return err;
 }
 
-double NNetwork::getreserror()
+double NNetwork::get_final_error()
 {
 	double err = 0;
 	for (size_t i = 0; i < errors[layer_count - 2].get_columns_count(); i++) err += errors[layer_count - 2](0, i) * errors[layer_count - 2](0, i);
 	return err;
 }
 
-void NNetwork::printonscreen()
+Matrix<double> NNetwork::pass_input(const Matrix<double>& input)
+{
+	forward(input);
+	return layers[layer_count - 1];
+}
+
+void NNetwork::print_on_screen()
 {
 	cls();
 	std::cout.precision(4);
@@ -143,5 +163,31 @@ void NNetwork::printonscreen()
 		if (i > 0) { std::cout << "Error:\n"; errors[i - 1].print("\t"); std::cout << "\n"; }
 		if (i < layer_count - 1) { std::cout << "Weights:\n"; weights[i].print("\t"); std::cout << "\n\n\n\n"; }
 	}
-	std::cout << "Error: " << getallerrors();
+	std::cout << "Error: " << get_all_errors();
 }
+
+std::ofstream& operator<<(std::ofstream &fout, const NNetwork &nn)
+{
+	fout << ' ' << nn.layer_count << ' ';
+	for (size_t i = 0; i < nn.layer_count; i++) fout << nn.layers[i].get_columns_count() << ' ';
+	for (size_t i = 0; i < nn.layer_count - 1; i++) fout << nn.weights[i];
+	return fout;
+}
+
+std::ifstream& operator>>(std::ifstream &fin, NNetwork &nn)
+{
+	size_t l_c;
+	std::deque<size_t> l_ss;
+	fin >> l_c;
+	for (size_t i = 0; i < l_c; i++)
+	{
+		size_t l_s;
+		fin >> l_s;
+		l_ss.push_back(l_s - (i != l_c - 1));
+	}
+	NNetwork nnn(l_c, l_ss);
+	nn = nnn;
+	for (size_t i = 0; i < l_c - 1; i++) fin >> nn.weights[i];
+	return fin;
+}
+

@@ -1,5 +1,6 @@
 #include <iostream>
 #include <conio.h>
+#include <fstream>
 #include "NNetwork.hpp"
 #include "Matrix.hpp"
 using namespace std;
@@ -37,26 +38,37 @@ Matrix<double> err_c_a(const Matrix<double> &res, const Matrix<double> &exp_res)
 }
 int main()
 {
-	NNetwork nn(4, {9, 5, 4, 2}, 0.5, sigmoid, sigmoid_deriv, err_c_a);
+	Matrix<Matrix<double>>;
+	NNetwork nn(4, {9, 5, 4, 2}, 0.5);
+	ifstream fin("output.txt");
+	fin >> nn;
+	//nn.set_error_counting_algorithm(err_c_a);
 	double prse = 0.0, prre = 0.0;
-	for (int step = 0; ;step++)
+	bool quit = 0;
+	for (int step = 0; !quit ;step++)
 	{
 		double sum_err = 0.0, res_err = 0.0;
 		for (int i = 0; i < 16; i++)
 		{
-			nn.onecycle(database[i][0], database[i][1]);
-			sum_err += nn.getallerrors();
-			res_err += nn.getreserror();
+			nn.one_learning_cycle(database[i][0], database[i][1]);
+			sum_err += nn.get_all_errors();
+			res_err += nn.get_final_error();
 			
 		}
-		nn.printonscreen();
+		nn.print_on_screen();
 		cout << "\n\n";
 		cout << prse << '\t' << prre << '\t' << step << endl;
 		prse = sum_err; 
 		prre = res_err;
-		
+		if (_kbhit())
+		{
+			char ch = _getch();
+			if (ch == 'q') quit = 1;
+		}
 
 	}
+	ofstream fout("output.txt");
+	fout << nn;
 
 	return 0;
 }
