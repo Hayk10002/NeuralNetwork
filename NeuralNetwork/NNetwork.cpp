@@ -50,6 +50,28 @@ Matrix<double> def_error_counting_alg(const Matrix<double>& a, const Matrix<doub
 {
 	return -(a - b);
 }
+std::deque<Matrix<double>> NNetwork::return_dweights()
+{
+	std::deque<Matrix<double>> dweights;
+	for (size_t i = 0; i < layer_count - 1; i++)
+	{
+		Matrix<double> layer = layers[i + 1];
+		layer.resize(layer.get_rows_count(), layer.get_columns_count() - (i != layer_count - 2));
+		layer.apply_func(activ_func.f_deriv);
+		Matrix<double> dweight(layers[i].get_Transpose() * (l_rate * multelembyelem(layer, errors[i])));
+		dweights.push_back(dweight);
+	}
+	return dweights;
+}
+NNetwork::NNetwork(const NNetwork & other):
+	layer_count(other.layer_count),
+	l_rate(other.l_rate),
+	weights(other.weights),
+	activ_func(other.activ_func),
+	err_counting_alg(other.err_counting_alg)
+{
+
+}
 NNetwork::NNetwork(size_t lc, std::deque<size_t> ls, double l_rate) :
 	layer_count(lc),
 	l_rate(l_rate)
@@ -130,6 +152,26 @@ void NNetwork::one_learning_cycle(const Matrix<double> &input_m, const Matrix<do
 	find_errors(output_res_m);
 	weights_correction();
 
+}
+
+void NNetwork::learning_cycles_threaded(size_t cycles_count, const std::deque<Matrix<double>>& input_ms, const std::deque<Matrix<double>>& output_res_ms)
+{
+	std::deque<std::deque<Matrix<double>>> dweightss(cycles_count);
+	std::thread* threads = new std::thread[cycles_count];
+	for (size_t i = 0; i < cycles_count; i++)
+	{
+		threads[i] = std::thread([&]()
+		{
+			NNetwork nn(*this);
+			nn.forward(input_ms[i]);
+			nn.find_errors(output_res_ms[i]);
+			dweightss[i] = nn.return_dweights();
+		});
+	}
+	for (size_t i = 0; i < cycles_count; i++) threads[i].join();
+	delete[] threads;
+
+	for (size_t i = 0; i < cycles_count; i++) for (size_t j = 0; j < layer_count - 1; j++) weights[j] += dweightss[i][j];
 }
 
 double NNetwork::get_all_errors()
