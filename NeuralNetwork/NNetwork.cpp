@@ -66,7 +66,9 @@ std::deque<Matrix<double>> NNetwork::return_dweights()
 NNetwork::NNetwork(const NNetwork & other):
 	layer_count(other.layer_count),
 	l_rate(other.l_rate),
+	layers(other.layers),
 	weights(other.weights),
+	errors(other.errors),
 	activ_func(other.activ_func),
 	err_counting_alg(other.err_counting_alg)
 {
@@ -160,13 +162,13 @@ void NNetwork::learning_cycles_threaded(size_t cycles_count, const std::deque<Ma
 	std::thread* threads = new std::thread[cycles_count];
 	for (size_t i = 0; i < cycles_count; i++)
 	{
-		threads[i] = std::thread([&]()
+		threads[i] = std::thread([&](int n)
 		{
 			NNetwork nn(*this);
-			nn.forward(input_ms[i]);
-			nn.find_errors(output_res_ms[i]);
-			dweightss[i] = nn.return_dweights();
-		});
+			nn.forward(input_ms[n]);
+			nn.find_errors(output_res_ms[n]);
+			dweightss[n] = nn.return_dweights();
+		}, i);
 	}
 	for (size_t i = 0; i < cycles_count; i++) threads[i].join();
 	delete[] threads;
